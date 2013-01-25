@@ -7,8 +7,8 @@ class CardHolder:
 	def __init__(self):
 		self.cards = []
 
-	def insertCard(self, number, type):
-		self.cards.append(Card(number,type))
+	def insertCard(self, card):
+		self.cards.append(card)
 
 	# may not need
 	def insertCards(self, cards):
@@ -23,7 +23,9 @@ class CardHolder:
 
 
 	def discardCardPair(self, card):
+		discardList = [card, self.cards[self.cards.index(card)]]
 		self.cards.remove(card)
+		return discardList
 
 	def shuffle(self):
 		shuffle(self.cards)
@@ -35,7 +37,7 @@ class CardHolder:
 		return self.cards[index]
 
 	def __repr__(self):
-		return self.cards
+		return repr(self.cards)
 
 	def __str__(self):
 		string = ""
@@ -44,11 +46,14 @@ class CardHolder:
 
 		return string
 
+	def __len__(self):
+		return len(self.cards)
+
 if __name__ == "__main__":
 	cardHolder = CardHolder()
-	cardHolder.insertCard("2", "hearts")
-	cardHolder.insertCard("3", "hearts")
-	cardHolder.insertCard("4", "hearts")
+	cardHolder.insertCard(Card("2", "hearts"))
+	cardHolder.insertCard(Card("3", "hearts"))
+	cardHolder.insertCard(Card("4", "hearts"))
 
 	print "\n\tCards in hand: \n\t", cardHolder
 	cardHolder.shuffle()
