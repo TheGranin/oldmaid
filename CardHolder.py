@@ -1,6 +1,5 @@
 from Card import *
 from random import shuffle
-from collections import Counter
 
 #  TODO what if the card is invalid, either type or number ?, should check this, but for now ignore
 class CardHolder:
@@ -23,7 +22,8 @@ class CardHolder:
 
 
 	def discardCardPair(self, card):
-		discardList = [card, self.cards[self.cards.index(card)]]
+		tmpCard = self.cards[self.cards.index(card)]
+		discardList = [[card.number, card.type] , [card.number, card.type]]
 		self.cards.remove(card)
 		return discardList
 

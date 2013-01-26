@@ -28,7 +28,7 @@ class Server():
 
 class Client():
 	def connect(self, addr, port):
-		print "Client connecting to: ", port
+		print "Client connecting to: ", addr,port
 		try:    
 			self.cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.cs.connect((addr, port))

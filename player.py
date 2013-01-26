@@ -56,7 +56,7 @@ class Player:
 		gameData =  self.joinTheTable()
 		while(self.state != "GameOver"):
 			if self.state == "Startphase":
-
+				print "State : Startphase"
 				# Should parse the data and do an action based on the data, if i am player one i should draw a card, if not i should wait until it's my turn
 				# gameData = json.loads('{"result":"ok", "players":{"player1":[["1.1", 11], "asv009"], "player2":[["2.2", 22], "nick"]}}')
 				
@@ -67,15 +67,16 @@ class Player:
 					# Start a thread acception connections now, just to make it ready
 					# thread.start_new_thread(self.server.connect(),())
 					me = self.players.getMyData()
-					self.server = Server(me[0][0], me[0][1])
+
+					#NOTE if i use the ip from the table something goes wrong
+					self.server = Server('0.0.0.0', me[0][1])
 
 					nextPlayer = self.players.getNextPlayer()
 
-					print "me and nextplayer: ",  me, nextPlayer
 					self.client.connect(nextPlayer[0][0], nextPlayer[0][1])
 					self.server.connect()
 
-					#should connect again if this failed
+					#TODO should connect again if this failed
 
 
 					#I am first player, i should start drawing
@@ -90,31 +91,38 @@ class Player:
 					print "The table returned error, can't play the game ", gameData 
 					return
 			elif self.state == "DrawCardFromTable":
-				print "State is DrawCard"
-				# REMOVE when server is up
+				print "State : DrawCard"
 				cardData = self.drawCardFromTable()
-
+		
 				# message from table can be --> {result:ok/last_card/error, card: [3, spades]}
 				# cardData = json.loads('{"result":"ok", "card": ["3", "spades"]}')
-				if cardData["result"] == "ok":
+				if cardData["result"] != "error":
+					
+					#Place the card inside your hand if not a pair
 					cardtmp = cardData["card"]
 					card = Card(cardtmp[0], cardtmp[1])
+
 					if self.hand.equalCards(card):
 						discardList = self.hand.discardCardPair(card)
-						print "must discard card pair", card
-						# print discardList
 						self.discardCards(discardList)
 					else:
 						self.hand.insertCard(card)
-						print "My hand is now ", self.hand
-					
-					self.sendTurnToNextOpponent()
-					self.state = "WaitForTurn"
 
+					if cardData["result"] == "ok":
+						self.sendTurnToNextOpponent()
+						self.state = "WaitForTurn"
+					elif cardData["result"] == "last_card":
+						self.state = "OfferHand"
+		
 				else:
 					print "Didn't get to draw a card ", cardData
+					return 
+				
+					
+				
+				
 			elif self.state == "WaitForTurn":
-				"State Is waiting"
+				print "State : waiting"
 			
 				datafromOponent = json.loads(self.server.recive(1000))
 				if datafromOponent["cmd"] == "your_turn":
@@ -124,6 +132,12 @@ class Player:
 				else:
 					print "Got something i didn't expect from opponent ", datafromOponent
 					return
+
+			elif self.state == "OfferHand":
+				print "State : OfferHand"
+				print self.hand
+				#for now simply stop the game
+				return
 
 			else:
 				print "unknown state ", self.state
@@ -160,15 +174,14 @@ class Player:
 
 		drawCardData = json.dumps({'cmd': 'draw'})
 		cardData = self.sendToTable(drawCardData)
-		print "Draw card: ", cardData
 		return cardData
 
 	def discardCards(self, cards):
 		# send {cmd:discard, cards: [[3, spades], [3, clubs]], last_cards:true/false} 
 		# Returns {result: ok/error, message:ok/error_message}
-
-		discardCardData = json.dumps({"cmd": "discard", "cards": cards, "last_cards": len(self.hand) == 0})
-		print discardCardData
+		
+		discardCardData = json.dumps({"cmd": "discard", "cards": str(cards), "last_cards": len(self.hand) == 0})
+		#print discardCardData
 
 
 		#TEST SERVER DO NOT SUPPORT
@@ -185,6 +198,6 @@ class Player:
 if __name__ == "__main__":
 	player = Player(sys.argv[1])
 	player.main()
-	# player.joinTheTable()
+
 
 
