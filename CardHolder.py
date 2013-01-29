@@ -1,5 +1,6 @@
 from Card import *
 from random import shuffle
+import random
 
 #  TODO what if the card is invalid, either type or number ?, should check this, but for now ignore
 class CardHolder:
@@ -31,7 +32,8 @@ class CardHolder:
 		shuffle(self.cards)
 
 	def pickCard(self, index):
-		return self.cards.pop(index)
+		card = self.cards.pop(index)
+		return [card.number, card.type]
 
 	def __getitem__(self, index):
 		return self.cards[index]

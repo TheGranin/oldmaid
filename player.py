@@ -47,12 +47,11 @@ class Player:
 		self.client = Client()
 		
 
-	#should run the whole game, state machine?
+	#should run the whole game, state machine? METHODS !!!!
 	def main(self):
 
 		
 
-		#UNCOMMENT WHEN THE SERVER IS UP
 		gameData =  self.joinTheTable()
 		while(self.state != "GameOver"):
 			if self.state == "Startphase":
@@ -129,22 +128,91 @@ class Player:
 					self.server.send(json.dumps({"result": "ok"}))
 					self.state = "DrawCardFromTable"
 
+				elif datafromOponent["cmd"] == "offer":
+					self.server.send(json.dumps({"result": "ok"}))
+					self.state = "PickCard"
+
 				else:
 					print "Got something i didn't expect from opponent ", datafromOponent
 					return
 
 			elif self.state == "OfferHand":
+
 				print "State : OfferHand"
 				print self.hand
-				#for now simply stop the game
-				return
+				self.hand.shuffle()
+
+
+				print "length of card ", len(self.hand)
+				self.sendOfferHand()
+				datafromOponent = json.loads(self.server.recive(1000))
+				if datafromOponent["cmd"] == "pick":
+					data = json.dumps({'result': 'ok', 'card': self.hand.pickCard(int(datafromOponent["card_num"]))})
+					self.server.send(data)
+					self.state = "WaitForTurn"
+				else: #can recive out instead ...
+					print "Strange command recived instead of pick: ", datafromOponent
+
+
+
+
+			elif self.state == "PickCard":
+				print "State : PickCard"
+				print "number of cards got from opponent " , int(datafromOponent["num_cards"])
+				num = random.randint(0,int(datafromOponent["num_cards"]))
+				sendPickData = json.dumps({'cmd' : 'pick', 'card_num' : num})
+				print "picked : ", num
+				try:
+					self.client.send(sendPickData)
+					responseJson = self.client.recive(1000)
+					response = json.loads(responseJson)
+
+				except Exception as e:
+					print "Pick Card failed: ", e.args
+					return
+
+				if response["result"] != "error":
+			
+					#Place the card inside your hand if not a pair
+					cardtmp = response["card"]
+					card = Card(cardtmp[0], cardtmp[1])
+
+					if self.hand.equalCards(card):
+						discardList = self.hand.discardCardPair(card)
+						self.discardCards(discardList)
+					else:
+						self.hand.insertCard(card)
+
+					self.state = "OfferHand"
+
+
+				else:
+					print "Didn't get to pick a card ", response
+					return 
+				
+
+				# May need it, but it depends how much interopability that should be supported
+			# elif self.state = "WaitForOfferCard"
 
 			else:
 				print "unknown state ", self.state
 				return
 
 
-				
+	def sendOfferHand(self):
+		sendOfferHandData = json.dumps({'cmd' : 'offer', 'num_cards' : (len(self.hand) -1)})
+
+		try:
+			self.client.send(sendOfferHandData)
+			responseJson = self.client.recive(1000)
+			response = json.loads(responseJson)
+
+		except Exception as e:
+				print "Offer hand failed: ", e.args
+				sys.exit()
+
+		if response["result"] != "ok":
+			print "next player did not accept the next turn ", response
 
 	def sendTurnToNextOpponent(self):
 		sendTurnData = json.dumps({'cmd' : 'your_turn'})
@@ -153,7 +221,8 @@ class Player:
 			response = json.loads(self.client.recive(1000))
 
 		except Exception as e:
-			print "Could't send data to socket ", e.args
+			print "Could't send next turn to socket ", e.args
+			sys.exit()
 
 		if response["result"] != "ok":
 			print "next player did not accept the next turn ", response

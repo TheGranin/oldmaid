@@ -161,7 +161,8 @@ class Server:
         for kind in kinds:
             for x in range(1, 14):
                 deck.append(Card(x, kind))
-                
+        
+        dec.append(Card(0, Kinds.JOKER))
         random.shuffle(deck)
         
         player_turn = 0

@@ -9,7 +9,7 @@ class Server():
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 		print "server listening on addr, port: ", addr, port
 		self.sock.bind((addr, port))
-		self.sock.listen(3)
+		self.sock.listen(8)
 
 	def connect(self):
 		print "Start accepting connections"
