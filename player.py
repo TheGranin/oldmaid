@@ -137,7 +137,7 @@ class Player:
 					return
 
 			elif self.state == "OfferHand":
-
+				#Can win game now
 				print "State : OfferHand"
 				print self.hand
 				self.hand.shuffle()
@@ -149,6 +149,13 @@ class Player:
 				if datafromOponent["cmd"] == "pick":
 					data = json.dumps({'result': 'ok', 'card': self.hand.pickCard(int(datafromOponent["card_num"]))})
 					self.server.send(data)
+					
+					if len(self.hand) == 0:
+							print "I won the game"
+							self.state = "WaitForEndOfGame" 
+							continue
+
+					
 					self.state = "WaitForTurn"
 				else: #can recive out instead ...
 					print "Strange command recived instead of pick: ", datafromOponent
@@ -157,6 +164,7 @@ class Player:
 
 
 			elif self.state == "PickCard":
+				#Can win game here
 				print "State : PickCard"
 				print "number of cards got from opponent " , int(datafromOponent["num_cards"])
 				num = random.randint(0,int(datafromOponent["num_cards"]))
@@ -180,6 +188,12 @@ class Player:
 					if self.hand.equalCards(card):
 						discardList = self.hand.discardCardPair(card)
 						self.discardCards(discardList)
+						
+						if len(self.hand) == 0:
+							print "I won the game"
+							self.state = "WaitForEndOfGame"
+							continue
+						
 					else:
 						self.hand.insertCard(card)
 
@@ -193,7 +207,10 @@ class Player:
 
 				# May need it, but it depends how much interopability that should be supported
 			# elif self.state = "WaitForOfferCard"
-
+			elif self.state == "WaitForEndOfGame":
+				pass
+				
+				
 			else:
 				print "unknown state ", self.state
 				return
