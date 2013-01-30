@@ -1,5 +1,4 @@
 from Card import *
-from random import shuffle
 import random
 
 #  TODO what if the card is invalid, either type or number ?, should check this, but for now ignore
@@ -29,7 +28,7 @@ class CardHolder:
 		return discardList
 
 	def shuffle(self):
-		shuffle(self.cards)
+		random.shuffle(self.cards)
 
 	def pickCard(self, index):
 		card = self.cards.pop(index)

@@ -1,11 +1,10 @@
-#!/usr/bin/env python
 # -*- coding: utf8 -*- 
 
-import socket, time, json, random
-import threading
+import socket, time, json, random, sys
+import thread
 
 class Kinds:
-    HEARTS  = "hearts"
+    HEARTS   = "hearts"
     SPADES   = "spades"
     CLUBS    = "clubs"
     DIAMONDS = "diamonds"
@@ -16,6 +15,23 @@ class Kinds:
     
     REDS     = [HEARTS, DIAMONDS]
     BLACKS   = [CLUBS,  SPADES]
+    
+class Player:
+    def __init__(self, nick, conn):
+        self.nick = nick
+        self.conn = conn
+        self.ip = None
+        self.out = False
+        self.myTurn = False
+        self.nextPlayer = None
+        
+    def setOut(self):
+        self.out = True
+        
+    def nextPlayerTurn(self):
+        if self.myTurn:
+            self.myTurn = False
+            self.nextPlayer.myTurn = True
     
 class Card:
     def __init__(self, number, kind):
@@ -43,154 +59,123 @@ class Card:
             return "The joker"
         return "%s of %s" % (self.value, self.kind)
         
-class Hand:
-    def __init__(self, client):
-        self._cards = []
-        self._client = client
-        
-    def addCard(self, card):
-        if card in self._cards:
-            self._cards.remove(card)
-            self._discard(card)
-        else:
-            self._cards.append(card)
-            
-    def _discard(self, card):
-        if card.color == Kinds.RED:
-            colors = Kinds.REDS
-        else:
-            colors = Kinds.BLACKS
-        
-        cmd = {"cmd": "discard"}
-        if self.numCards() == 0:
-            cmd["last_cards"] = True
-        else:
-            cmd["last_cards"] = False
-
-        cmd["cards"] = [[card.value, color] for color in colors]
-        print "Discarding, now I got", self.numCards(), "cards left." 
-        #self._client.send(cmd)
-        #self._client.read() # The OK-message from server
-            
-    def getCard(self, num):
-        if self.numCards() == 0:
-            raise IndexError("No cards on the hand")
-            return None
-        elif num >= self.numCards():
-            raise IndexError("Asked for card %d, highest is %d." % (num, self.numCards()-1))
-            return None
-        return self._cards.pop(num)
-            
-    def numCards(self):
-        return len(self._cards)
-        
-    def hasJoker(self):
-        if self.getJokerIndex():
-            return True
-        return False
-        
-    def getJokerIndex(self):
-        for x in range(self.numCards()):
-            if self._cards[x].color == Kinds.JOKER:
-                return x
-        return False
-            
-    def __len__(self):
-        return self.numCards()
-        
-    def __repr__(self):
-        if not self._cards:
-            return "The hand is empty"
-        else:
-            myStr = "The hand has following %d card(s):\n" % self.numCards()
-            for card in self._cards:
-                myStr += "\t%s\n" % str(card)
-            return myStr[:-1]
-            
-
-
 class Server:
-    def start(self, port, numPlayers=4):
+    def __init__(self, port, numplayers=4):
+        self._maxPlayers = numplayers
+        self._port = port
+        
+    def start(self):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
-        self._sock.bind(("0.0.0.0", port))
+        self._sock.bind(("0.0.0.0", self._port))
         self._sock.listen(3)
-        self._numPlayers = numPlayers
-        print "Server is running"
-        
+    
+        print "Server started..."
         while True:
-            print "New game: Waiting for players"
-            self.getPlayers()
-            self.waitForJoin()
-            print "Game is starting"
-            self.drawStage()
-            self.gameStage()
-            print "Game completed"
-        
-    def getPlayers(self):
-        pc = []
-        for x in range(self._numPlayers):
-            conn, addr = self._sock.accept()
-            print "Recieved connection", x
-            pc.append(conn)
-        print "All connections recieved - game starting"
-        self.socks = pc
-        
-    def waitForJoin(self):
-        player_nicks = []
-        for player in self.socks:
-            cmd = player.recv(1024)
-            cmd_dict = json.loads(cmd)
-            player_nicks.append(cmd_dict["nick"])
-        
-        players = {}
-        cmd = {"result": "ok"}
-        for x in range(len(self.socks)):
-            playername = "player" + str(x+1)
-            players[playername] = [("localhost", 10055+x), player_nicks[x]]
-            
-        cmd['players'] = players
-        self._players = players
-        
-        for player in self.socks:
-            player.send(json.dumps(cmd))
-            
-    def drawStage(self):
-        kinds = [Kinds.HEARTS, Kinds.SPADES, Kinds.CLUBS, Kinds.DIAMONDS]
+            try:
+                print "Waiting for players connect."
+                players = self.getPlayers()
+                print "All players connected: Starting game!"
+                self.startNewGame(players)
+                
+            except KeyboardInterrupt:
+                print "Server shutting down"
+                return
+            except Exception as e:
+                print "Error starting game... Error:", e
+                            
+    def startNewGame(self, players):
         deck = []
-        for kind in kinds:
+        for color in Kinds.REDS + Kinds.BLACKS:
             for x in range(1, 14):
-                deck.append(Card(x, kind))
-        
-        deck.append(Card(0, Kinds.JOKER))
+                deck.append(Card(x, color))
+        deck.append(Card(1, Kinds.JOKER))
         random.shuffle(deck)
         
-        player_turn = 0
-        while len(deck) > 0:
-            cmd = json.loads(self.socks[player_turn].recv(1024))                
-            if cmd["cmd"] == "draw":
-                card = deck.pop()
-                reply = {"card": [card.value, card.kind]}
-                if len(deck) == 0:
-                    reply["result"] = "last_card"
-                else:
-                    reply["result"] = "ok"
-                
-                print "sending card:", card    
-                self.socks[player_turn].send(json.dumps(reply))
-                player_turn = (player_turn + 1) % self._numPlayers   
-                
-            elif cmd["cmd"] == "discard":
-                print "Player discarded cards"
-                reply = {"result": "ok", "message": "ok"}  
-                self.socks[player_turn].send(json.dumps(reply))  
+        for player in players:
+            thread.start_new_thread(self._playerThread, (deck, player, players))
+        
+    def _playerThread(self, deck, player, players):
+        while True:
+            try:
+                msg = player.conn.recv(1024)
+                cmd = json.loads(msg)
             
-        print "Draw stage completed"
+                if cmd["cmd"] == "status":
+                    print "Recieved status message from", player.nick
+                    outPlayers = [p.nick for p in players if p.out]
+                    inPlayers = [p.nick for p in players if not p.out]
+                    reply = {"in": inPlayers, "out": outPlayers}
+                    player.conn.send(json.dumps(reply))              
+                                        
+                elif cmd["cmd"] == "out_of_cards":
+                    print player.nick, "is out."
+                    player.setOut()
+                    player.conn.send(json.dumps({"result": "ok"}))
+                    
+                elif cmd["cmd"] == "discard":
+                    print player.nick, "Discarded cards"
+                    player.conn.send(json.dumps({"result": "ok", "message": "ok"}))
+                    
+                elif cmd["cmd"] == "draw":
+                    if not player.myTurn:
+                        print player.nick, "tried to cheat!"
+                        player.conn.send(json.dumps({"result": "error"}))
+                    else:
+                        card = deck.pop(0)
+                        print player.nick, "draws card:", card
+                        reply = {"card": [card.value, card.kind]}
+                        if len(deck) == 0:
+                            reply["result"] = "last_card"
+                            print "This is the last card -> GAME STARTING"
+                        else:
+                            reply["result"] = "ok"
+                        player.nextPlayerTurn()    
+                        player.conn.send(json.dumps(reply))
+            except Exception as e:
+                print "Closing connection to client:", player.nick
+                return
+            
+    def getPlayers(self):
+        players = []
+        for x in range(self._maxPlayers):
+            conn, addr = self._sock.accept()
+            player = Player("NoName", conn)
+            player.ip = addr[0]
+            print "A player joined the game"
+            players.append(player)
+        self.waitForJoin(players)
         
-    def gameStage(self):
-        pass
+        for x in range(len(players)):
+            players[x].nextPlayer = players[(x+1)%len(players)]
+        players[0].myTurn = True
+        return players
         
+    def waitForJoin(self, players):
+        player_nicks = []
+        for player in players:
+            cmd = player.conn.recv(1024)
+            cmd_dict = json.loads(cmd)
+            player.nick = cmd_dict["nick"]
+            
+            if "steffen" in player.nick.lower():
+                cmd = {"result": "error", "message": "Awsomeness of name too high! (it's over 9000)"}
+                player.conn.send(json.dumps(cmd))
+                raise Exception("Too awsome name used!")
+        
+        player_dict = {}
+        cmd = {"result": "ok"}
+        start_port = random.randrange(20000, 30000)
+        for x in range(len(players)):
+            playername = "player" + str(x+1)
+            player_dict[playername] = [(players[x].ip, start_port+x), players[x].nick]
+            
+        cmd['players'] = player_dict        
+        for player in players:
+            player.conn.send(json.dumps(cmd))
+
 if __name__ == '__main__':
-    server = Server()
-    server.start(9898, 2)
+    server = Server(9898, int(sys.argv[1]))
+    server.start()
     print "Server terminated"
+        
