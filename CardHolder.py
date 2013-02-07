@@ -23,7 +23,7 @@ class CardHolder:
 
 	def discardCardPair(self, card):
 		tmpCard = self.cards[self.cards.index(card)]
-		discardList = [[card.number, card.type] , [card.number, card.type]]
+		discardList = [[card.number, card.type] , [tmpCard.number, tmpCard.type]]
 		self.cards.remove(card)
 		return discardList
 

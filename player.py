@@ -4,34 +4,30 @@ import json
 import string
 
 
-# addr = 'njaal.net'
-# addr = '129.242.22.237'
-addr = 'localhost'
+addr = 'njaal.net'
+#addr = 'localhost'
 port = 9898
+my_port = random.randint(10000, 15000)
 
-
-#Update this to handle the connections as well
 class Players():
+	'''
+	Class for keeping track of the players in play
+	'''
 	def __init__(self, players, nick):
-		'''
-		Since dicts in python is sorted after buckets, it must be sorted correctly again, so here is a hack to complete it
-		'''
-		self.players = []
+		print players
+
+		self.players = players
 		self.out = []
 		self.index = 0
 		self.nick = nick
-		rightOrderOfPlayers = sorted(players)
-		
-		for player in rightOrderOfPlayers:
-			self.players.append(players[player])
-			if players[player][-1] == nick:
-				self.index = len(self.players) - 1
 
-	
+		#optimize in the future !!!! can find this faster
+		for player in self.players:
+			if player[-1] == nick:
+				self.index = self.players.index(player)
 
 	def getMyData(self):
 		return self.players[self.index]
-
 
 	def getNextPlayer(self):
 		return self.players[(self.index + 1) % len(self.players)]
@@ -44,7 +40,7 @@ class Players():
 		if len(playersData["in"]) <= 1:
 			return -1
 
-		#If not we need to resort the list of players and who we are connected to and such
+		#If not we need to resort the list of players and who we are to connect to and such
 
 		remove = []
 		for player in playersData["out"]:
@@ -65,61 +61,54 @@ class Players():
 
 
 
-
-
-#Main class, should control the game
 class Player:
+	'''
+	Main class to do the old maid
+	'''
 	def __init__(self, nick):
 		self.nick = nick
 		self.state = "Startphase"
 		self.hand = CardHolder()
 		self.client = Client()
 
-	#should run the whole game, state machine? METHODS !!!!
 	def main(self):
 
 		gameData =  self.joinTheTable()
 		while(self.state != "GameOver"):
 			if self.state == "Startphase":
 				print "State : Startphase"
-				# Should parse the data and do an action based on the data, if i am player one i should draw a card, if not i should wait until it's my turn
-				# gameData = json.loads('{"result":"ok", "players":{"player1":[["1.1", 11], "asv009"], "player2":[["2.2", 22], "nick"]}}')
 				
 				if gameData["result"] == "ok":
-					self.players = Players(gameData["players"], self.nick)
-					
-					#MAYBE NOT
-					# Start a thread acception connections now, just to make it ready
-					# thread.start_new_thread(self.server.connect(),())
-					me = self.players.getMyData()
 
-					#NOTE if i use the ip from the table something goes wrong
+					#Start by connecting to the other players
+					self.players = Players(gameData["players"], self.nick)
+					me = self.players.getMyData()
 					self.server = Server('0.0.0.0', me[0][1])
+					
 
 					self.nextPlayer = self.players.getNextPlayer()
-					self.client.connect(self.nextPlayer[0][0], self.nextPlayer[0][1])
+
+					#Nasty hack because the server sucks BIG TIME, could write a better one in my sleep
+					self.client.connect(self.nextPlayer[0][0].split(':')[-1], self.nextPlayer[0][1])
 					self.server.connect()
 
-					
-				
-
-					#I am first player, i should start drawing
+					#The first player start drawing card from the table
 					if self.players.getMyIndex() == 0:
 						self.state = "DrawCardFromTable"
 
-					#I am not first player, i should wait for my turn
+					#The rest wait for their turn
 					else:
 						self.state = "WaitForTurn"
 
 				else:
 					print "The table returned error, can't play the game ", gameData 
 					return
+
 			elif self.state == "DrawCardFromTable":
 				print "State : DrawCard"
 				cardData = self.drawCardFromTable()
-		
-				# message from table can be --> {result:ok/last_card/error, card: [3, spades]}
-				# cardData = json.loads('{"result":"ok", "card": ["3", "spades"]}')
+			
+
 				if cardData["result"] != "error":
 					
 					#Place the card inside your hand if not a pair
@@ -132,9 +121,12 @@ class Player:
 					else:
 						self.hand.insertCard(card)
 
+					#If ok the turn is passed to the next player
 					if cardData["result"] == "ok":
 						self.sendTurnToNextOpponent()
 						self.state = "WaitForTurn"
+
+					#If last card all the cards has been drawn and i should start offering my hand
 					elif cardData["result"] == "last_card":
 						self.state = "OfferHand"
 		
@@ -143,19 +135,11 @@ class Player:
 					return 
 				
 					
-				
-				
 			elif self.state == "WaitForTurn":
 				print "State : waiting"
-			
-				try:
-					datafromOponent = json.loads(self.server.recive(1000))
-				except Exception as e:
-					res = self.players.update(self.getStatus())
-					if (res == -1):
-						print "I Lost the game, Game over"
-						return
 
+				#Do an action based on the cmd recived from opponent
+				datafromOponent = json.loads(self.server.recive(1000))
 				if datafromOponent["cmd"] == "your_turn":
 					self.server.send(json.dumps({"result": "ok"}))
 					self.state = "DrawCardFromTable"
@@ -171,12 +155,11 @@ class Player:
 			elif self.state == "OfferHand":
 				print "State : OfferHand"
 				self.offerHand()
-		
-
 
 			elif self.state == "PickCard":
-				#Can win game here
 				print "State : PickCard"
+
+			
 				total =int(datafromOponent["num_cards"])
 				print "number of cards got from opponent " , total
 
@@ -197,9 +180,8 @@ class Player:
 					continue
 
 
-				num = random.randint(0,int(datafromOponent["num_cards"]))
+				num = random.randint(0,int(datafromOponent["num_cards"] ))
 				sendPickData = json.dumps({'cmd' : 'pick', 'card_num' : num})
-				print "picked : ", num
 				try:
 					self.server.send(sendPickData)
 					responseJson = self.server.recive(1000)
@@ -220,8 +202,10 @@ class Player:
 						self.discardCards(discardList)
 						
 						if len(self.hand) == 0:
-							print "I won the game"
+							print "I won the game, by picking the last card i needed"
 							self.sendOut()
+							print "Sending offer hand to", self.nextPlayer[1]
+							
 							self.sendOfferHand()
 							self.state = "WaitForEndOfGame"
 							continue
@@ -234,6 +218,15 @@ class Player:
 
 					#If i took the last card from the other player
 					if total == 1:
+						#nasty hack, to simply allow tha other client to be out
+						time.sleep(1)
+
+						status = self.getStatus()
+						res = self.players.update(status)
+						if (res == -1):
+							print "I Lost the game, Picked the last card from the opponent"
+							return
+
 						self.server.connect()
 
 
@@ -270,14 +263,11 @@ class Player:
 
 
 	def offerHand(self):
-		#TODO Something wrong here
-		#TODO fix out message
 		print self.hand
 		self.hand.shuffle()
 
 
-		print "length of card ", len(self.hand)
-		
+		print "Sending offer hand to palyer: ", self.nextPlayer[1]
 		#The player i offered my hand to is out, so need to update the players
 		if (self.sendOfferHand() == -1):
 			res = self.players.update(self.getStatus())
@@ -293,7 +283,6 @@ class Player:
 			self.sendOfferHand()
 
 		datafromOponent = json.loads(self.client.recive(1000))
-		print datafromOponent
 		if datafromOponent["cmd"] == "pick":
 			data = json.dumps({'result': 'ok', 'card': self.hand.pickCard(int(datafromOponent["card_num"]) - 1)})
 			self.client.send(data)
@@ -357,7 +346,7 @@ class Player:
 		#example ('{"result":"ok", "players":{"player1":[["1.1", 11], "asv009"], "player2":[["2.2", 22], "nick"]}}')
 		self.tableClient = Client()
 		self.tableClient.connect(addr, port)
-		joinTableData = json.dumps({'cmd': 'join', 'nick': self.nick})
+		joinTableData = json.dumps({'cmd': 'join', 'nick': self.nick, 'port' : my_port})
 	
 		gameData = self.sendToTable(joinTableData)
 		return gameData
@@ -373,8 +362,8 @@ class Player:
 		# send {cmd:discard, cards: [[3, spades], [3, clubs]], last_cards:true/false} 
 		# Returns {result: ok/error, message:ok/error_message}
 		
-		discardCardData = json.dumps({"cmd": "discard", "cards": str(cards), "last_cards": (len(self.hand) == 0) & test})
-
+		discardCardData = json.dumps({"cmd": "discard", "cards": cards, "last_cards": (len(self.hand) == 0) & test})
+		print discardCardData
 		response = self.sendToTable(discardCardData)
 		if response["result"] != "ok":
 			print "Something went wrong with discard ", response

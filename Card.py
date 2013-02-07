@@ -4,7 +4,7 @@ class Kinds:
     SPADES   = "spades"
     CLUBS    = "clubs"
     DIAMONDS = "diamonds"
-    JOKER    = "joker"
+    JOKER    = "maid"
     
     RED      = "red"
     BLACK    = "black"
@@ -16,11 +16,11 @@ class Kinds:
 class Card:
 	def __init__(self, number, type):
 		if not type.lower() in Kinds.ALL:
-			print "Type not supported"
+			print "Type not supported", type
 			sys.exit()
 
 		self.type = type.lower()
-		self.number = int(number)
+		self.number = number
 
 	def __eq__(self, card):
 		if self.type in Kinds.REDS and card.type in Kinds.REDS:
